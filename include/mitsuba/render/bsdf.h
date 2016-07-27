@@ -62,6 +62,7 @@ public:
 	 * \param mode
 	 *      The transported mode (\ref ERadiance or \ref EImportance)
 	 */
+    
 	explicit inline BSDFSamplingRecord(const Intersection &its, Sampler *sampler,
 			ETransportMode mode = ERadiance);
 

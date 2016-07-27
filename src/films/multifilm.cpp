@@ -258,7 +258,8 @@ public:
 		m_ext_name[0] = new std::string("-out");
 		*/
 		
-		std::vector<std::string> defaultNames = {"-image"};
+		std::vector<std::string> defaultNames;
+                defaultNames.push_back("-image");
 		setBuffers(defaultNames);
 	}
 
@@ -543,7 +544,7 @@ public:
 		return fs::exists(filename);
 	}
 
-	std::string MultiFilm::toString() const {
+	std::string toString() const {
 		std::ostringstream oss;
 		oss << "multiFilm[" << endl
 			<< "  size = " << m_size.toString() << "," << endl

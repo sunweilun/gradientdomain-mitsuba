@@ -236,7 +236,7 @@ void PluginManager::ensurePluginLoaded(const std::string &name) {
 
 	const FileResolver *resolver = Thread::getThread()->getFileResolver();
 	fs::path path = resolver->resolve(shortName);
-
+        
 	if (fs::exists(path)) {
 		Log(EInfo, "Loading plugin \"%s\" ..", shortName.string().c_str());
 		m_plugins[name] = new Plugin(shortName.string(), path);

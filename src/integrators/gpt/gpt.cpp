@@ -24,7 +24,7 @@
 
 #include "gpt_proc.h"
 #include "gpt_wr.h"
-#include "../poisson_solver/Solver.hpp"
+//#include "../poisson_solver/Solver.hpp"
 
 
 MTS_NAMESPACE_BEGIN
@@ -575,7 +575,7 @@ public:
 					const Emitter *emitter = static_cast<const Emitter *>(dRec.object);
 
 					// If the emitter sampler produces a non-emitter, that's a problem.
-					SAssert(emitter != nullptr);
+					SAssert(emitter != NULL);
 
 					// Add radiance and gradients to the base path and its offset path.
 					// Query the BSDF to the emitter's direction.
@@ -989,6 +989,12 @@ public:
 
 							const BSDF* shiftedBSDF = shifted.rRec.its.getBSDF(shifted.ray);
 
+                                                        HalfVectorShiftResult shiftResult;
+                                                        EMeasure measure;
+                                                        BSDFSamplingRecord bRec(shifted.rRec.its, tangentSpaceIncomingDirection, tangentSpaceOutgoingDirection, ERadiance);
+                                                        Vector3 outgoingDirection;
+                                                        VertexType shiftedVertexType;
+                                                        
 							// Deny shifts between Dirac and non-Dirac BSDFs.
 							bool bothDelta = (mainBsdfResult.bRec.sampledType & BSDF::EDelta) && (shiftedBSDF->getType() & BSDF::EDelta);
 							bool bothSmooth = (mainBsdfResult.bRec.sampledType & BSDF::ESmooth) && (shiftedBSDF->getType() & BSDF::ESmooth);
@@ -1000,7 +1006,7 @@ public:
 							SAssert(fabs(shifted.ray.d.lengthSquared() - 1) < 0.000001);
 
 							// Apply the local shift.
-							HalfVectorShiftResult shiftResult = halfVectorShift(mainBsdfResult.bRec.wi, mainBsdfResult.bRec.wo, shifted.rRec.its.toLocal(-shifted.ray.d), mainBSDF->getEta(), shiftedBSDF->getEta());
+							shiftResult = halfVectorShift(mainBsdfResult.bRec.wi, mainBsdfResult.bRec.wo, shifted.rRec.its.toLocal(-shifted.ray.d), mainBSDF->getEta(), shiftedBSDF->getEta());
 
 							if(mainBsdfResult.bRec.sampledType & BSDF::EDelta) {
 								// Dirac delta integral is a point evaluation - no Jacobian determinant!
@@ -1018,11 +1024,10 @@ public:
 								goto half_vector_shift_failed;
 							}
 
-							Vector3 outgoingDirection = shifted.rRec.its.toWorld(tangentSpaceOutgoingDirection);
+							outgoingDirection = shifted.rRec.its.toWorld(tangentSpaceOutgoingDirection);
 
 							// Update throughput and pdf.
-							BSDFSamplingRecord bRec(shifted.rRec.its, tangentSpaceIncomingDirection, tangentSpaceOutgoingDirection, ERadiance);
-							EMeasure measure = (mainBsdfResult.bRec.sampledType & BSDF::EDelta) ? EDiscrete : ESolidAngle;
+							measure = (mainBsdfResult.bRec.sampledType & BSDF::EDelta) ? EDiscrete : ESolidAngle;
 
 							shifted.throughput *= shiftedBSDF->eval(bRec, measure);
 							shifted.pdf *= shiftedBSDF->pdf(bRec, measure);
@@ -1041,7 +1046,7 @@ public:
 
 
 							// Update the vertex type.
-							VertexType shiftedVertexType = getVertexType(shifted, *m_config, mainBsdfResult.bRec.sampledType);
+							shiftedVertexType = getVertexType(shifted, *m_config, mainBsdfResult.bRec.sampledType);
 
 							// Trace the next hit point.
 							shifted.ray = Ray(shifted.rRec.its.p, outgoingDirection, main.ray.time);
@@ -1370,7 +1375,12 @@ bool GradientPathIntegrator::render(Scene *scene,
 	/* Set up MultiFilm. */
 	ref<Film> film = sensor->getFilm();
 
-	std::vector<std::string> outNames = {"-final", "-throughput", "-dx", "-dy", "-direct"};
+	std::vector<std::string> outNames;
+        outNames.push_back("-final");
+        outNames.push_back("-throughput");
+        outNames.push_back("-dx");
+        outNames.push_back("-dy");
+        outNames.push_back("-direct");
 	if (!film->setBuffers(outNames)){
 		Log(EError, "Cannot render image! G-PT has been called without MultiFilm.");
 		return false;
@@ -1407,19 +1417,22 @@ bool GradientPathIntegrator::render(Scene *scene,
 
 #ifdef RECONSTRUCT
 	/* Reconstruct. */
-	if(m_config.m_reconstructL1 || m_config.m_reconstructL2) {
-		/* Allocate bitmaps for the solvers. */
-		ref<Bitmap> throughputBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
-		ref<Bitmap> directBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
-		ref<Bitmap> dxBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
-		ref<Bitmap> dyBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
-		ref<Bitmap> reconstructionBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
+        /* Allocate bitmaps for the solvers. */
+        ref<Bitmap> throughputBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
+        ref<Bitmap> directBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
+        ref<Bitmap> dxBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
+        ref<Bitmap> dyBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
+        ref<Bitmap> reconstructionBitmap(new Bitmap(Bitmap::ESpectrum, Bitmap::EFloat, film->getCropSize()));
 
-		/* Develop primal and gradient data into bitmaps. */
-		film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), throughputBitmap, BUFFER_THROUGHPUT);
-		film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), dxBitmap, BUFFER_DX);
-		film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), dyBitmap, BUFFER_DY);
-		film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), directBitmap, BUFFER_VERY_DIRECT);
+        /* Develop primal and gradient data into bitmaps. */
+        film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), throughputBitmap, BUFFER_THROUGHPUT);
+        film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), dxBitmap, BUFFER_DX);
+        film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), dyBitmap, BUFFER_DY);
+        film->developMulti(Point2i(0, 0), film->getCropSize(), Point2i(0, 0), directBitmap, BUFFER_VERY_DIRECT);
+        film->setBitmapMulti(directBitmap, 1, BUFFER_FINAL);
+#ifdef USE_ORIGINAL_REC
+	if(m_config.m_reconstructL1 || m_config.m_reconstructL2) {
+		
 
 		/* Transform the data for the solver. */
 		size_t subPixelCount = 3 * film->getCropSize().x * film->getCropSize().y;
@@ -1467,6 +1480,10 @@ bool GradientPathIntegrator::render(Scene *scene,
 
 		film->setBitmapMulti(reconstructionBitmap, 1, BUFFER_FINAL); 
 	}
+#else
+        
+#endif
+        
 #endif
 
 	return proc->getReturnStatus() == ParallelProcess::ESuccess;
