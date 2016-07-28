@@ -41,6 +41,7 @@ struct GradientPathTracerConfig {
 	bool m_reconstructL1;
 	bool m_reconstructL2;
 	Float m_reconstructAlpha;
+        int m_nJacobiIters;
 };
 
 
